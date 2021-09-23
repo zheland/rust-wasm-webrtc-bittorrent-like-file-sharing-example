@@ -19,7 +19,7 @@ mod state;
 
 use app::app;
 use server::Server;
-use socket::{Socket, SocketRunError};
+use socket::Socket;
 use socket_receiver::{SocketMessageReceiveError, SocketReceiver};
 use socket_sender::{SocketMessageSendError, SocketSender};
 use state::State;
