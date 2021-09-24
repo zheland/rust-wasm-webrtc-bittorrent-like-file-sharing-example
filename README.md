@@ -40,7 +40,7 @@ At the moment, the example is extremely CPU intensive, makes poor use of Peer-To
 * This peer now gets parts of the file, and also distributes the already downloaded parts to other peers,
 * Wait for the file to load (progress is shown in the browser log),
 * When the file is fully downloaded, a link will be added to the page to download it,
-* If the seeder gets disconnected, the leeches will still continue to exchange parts of the file, and after a while all the leeches will have the same percentage of the downloaded file.
+* If the seeder gets disconnected, the leechers will still continue to exchange parts of the file, and after a while all the leechers will have the same percentage of the downloaded file.
 
 ## License
 
