@@ -51,6 +51,8 @@ impl Socket {
             .await?;
 
         while let Some(message) = self.receiver.recv().await? {
+            log::debug!("peer {}: recv {:?}", peer_id, message);
+
             match message {
                 PeerTrackerMessage::RequestOffers { file_sha256 } => {
                     let peer_list = self
@@ -67,30 +69,48 @@ impl Socket {
                         self.send_to_peer(
                             other_peer_id,
                             TrackerPeerMessage::RequestOffer {
-                                peer_id: other_peer_id,
+                                peer_id,
+                                file_sha256,
                             },
                         )
                         .await?;
                     }
                 }
-                PeerTrackerMessage::SendOffer { peer_id, offer } => {
-                    self.send_to_peer(peer_id, TrackerPeerMessage::PeerOffer { peer_id, offer })
-                        .await?;
-                }
-                PeerTrackerMessage::SendAnswer { peer_id, answer } => {
-                    self.send_to_peer(peer_id, TrackerPeerMessage::PeerAnswer { peer_id, answer })
-                        .await?;
-                }
-                PeerTrackerMessage::SendIceCandidate { peer_id, candidate } => {
+                PeerTrackerMessage::SendOffer {
+                    peer_id: other_peer_id,
+                    offer,
+                } => {
                     self.send_to_peer(
-                        peer_id,
+                        other_peer_id,
+                        TrackerPeerMessage::PeerOffer { peer_id, offer },
+                    )
+                    .await?;
+                }
+                PeerTrackerMessage::SendAnswer {
+                    peer_id: other_peer_id,
+                    answer,
+                } => {
+                    self.send_to_peer(
+                        other_peer_id,
+                        TrackerPeerMessage::PeerAnswer { peer_id, answer },
+                    )
+                    .await?;
+                }
+                PeerTrackerMessage::SendIceCandidate {
+                    peer_id: other_peer_id,
+                    candidate,
+                } => {
+                    self.send_to_peer(
+                        other_peer_id,
                         TrackerPeerMessage::PeerIceCandidate { peer_id, candidate },
                     )
                     .await?;
                 }
-                PeerTrackerMessage::AllIceCandidatesSent { peer_id } => {
+                PeerTrackerMessage::AllIceCandidatesSent {
+                    peer_id: other_peer_id,
+                } => {
                     self.send_to_peer(
-                        peer_id,
+                        other_peer_id,
                         TrackerPeerMessage::PeerAllIceCandidatesSent { peer_id },
                     )
                     .await?;
@@ -107,6 +127,7 @@ impl Socket {
         peer_id: PeerId,
         message: TrackerPeerMessage,
     ) -> Result<(), SocketMessageSendError> {
+        log::debug!("peer {}: send {:?}", peer_id, message);
         let sender = self.state.get_peer_sender(peer_id).await;
         if let Some(sender) = sender {
             sender.lock().await.send(message).await?;
