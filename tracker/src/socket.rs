@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use async_std::net::TcpStream;
 use async_std::sync::Mutex;
-use protocol::{PeerId, ServerMessage};
 use thiserror::Error;
+use tracker_protocol::{PeerId, TrackerPeerMessage};
 
 use crate::{
     SocketMessageReceiveError, SocketMessageSendError, SocketReceiver, SocketSender, State,
@@ -37,22 +37,22 @@ impl Socket {
     }
 
     pub async fn run(mut self) -> Result<(), SocketRunError> {
-        use protocol::ClientMessage;
+        use tracker_protocol::PeerTrackerMessage;
 
         let addr = self.addr;
         log::info!("socket {} opened", addr);
 
         let peer_id = self.state.new_peer(&self.sender).await;
-        log::info!("socket {} client id assigned", peer_id);
+        log::info!("socket {} peer id assigned", peer_id);
         self.sender
             .lock()
             .await
-            .send(ServerMessage::PeerIdAssigned { peer_id })
+            .send(TrackerPeerMessage::PeerIdAssigned { peer_id })
             .await?;
 
         while let Some(message) = self.receiver.recv().await? {
             match message {
-                ClientMessage::RequestOffers { file_sha256 } => {
+                PeerTrackerMessage::RequestOffers { file_sha256 } => {
                     let peer_list = self
                         .state
                         .add_file_peer_and_get_file_peer_list(file_sha256, peer_id)
@@ -66,31 +66,34 @@ impl Socket {
 
                         self.send_to_peer(
                             other_peer_id,
-                            ServerMessage::OfferRequest {
+                            TrackerPeerMessage::RequestOffer {
                                 peer_id: other_peer_id,
                             },
                         )
                         .await?;
                     }
                 }
-                ClientMessage::SendOffer { peer_id, offer } => {
-                    self.send_to_peer(peer_id, ServerMessage::PeerOffer { peer_id, offer })
+                PeerTrackerMessage::SendOffer { peer_id, offer } => {
+                    self.send_to_peer(peer_id, TrackerPeerMessage::PeerOffer { peer_id, offer })
                         .await?;
                 }
-                ClientMessage::SendAnswer { peer_id, answer } => {
-                    self.send_to_peer(peer_id, ServerMessage::PeerAnswer { peer_id, answer })
+                PeerTrackerMessage::SendAnswer { peer_id, answer } => {
+                    self.send_to_peer(peer_id, TrackerPeerMessage::PeerAnswer { peer_id, answer })
                         .await?;
                 }
-                ClientMessage::SendIceCandidate { peer_id, candidate } => {
+                PeerTrackerMessage::SendIceCandidate { peer_id, candidate } => {
                     self.send_to_peer(
                         peer_id,
-                        ServerMessage::PeerIceCandidate { peer_id, candidate },
+                        TrackerPeerMessage::PeerIceCandidate { peer_id, candidate },
                     )
                     .await?;
                 }
-                ClientMessage::AllIceCandidatesSent { peer_id } => {
-                    self.send_to_peer(peer_id, ServerMessage::PeerAllIceCandidatesSent { peer_id })
-                        .await?;
+                PeerTrackerMessage::AllIceCandidatesSent { peer_id } => {
+                    self.send_to_peer(
+                        peer_id,
+                        TrackerPeerMessage::PeerAllIceCandidatesSent { peer_id },
+                    )
+                    .await?;
                 }
             }
         }
@@ -102,7 +105,7 @@ impl Socket {
     async fn send_to_peer(
         &self,
         peer_id: PeerId,
-        message: ServerMessage,
+        message: TrackerPeerMessage,
     ) -> Result<(), SocketMessageSendError> {
         let sender = self.state.get_peer_sender(peer_id).await;
         if let Some(sender) = sender {

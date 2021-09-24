@@ -62,8 +62,8 @@ features = [
     "Window",
 ]
 
-[dependencies.protocol]
-path = "../protocol"
+[dependencies.tracker-protocol]
+path = "../tracker-protocol"
 
 [features]
 default = ["wee_alloc"]

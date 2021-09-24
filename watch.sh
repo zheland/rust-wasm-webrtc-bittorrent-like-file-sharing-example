@@ -2,22 +2,22 @@
 
 trap "kill 0" EXIT
 
-SERVER_ADDRESS=$(hostname -I | awk '{print $1}')
-SERVER_PORT="9010"
+TRACKER_ADDRESS=$(hostname -I | awk '{print $1}')
+TRACKER_PORT="9010"
 
 (
     cd client
     mkdir -p target
-    echo $"window.server_address = \"ws://$SERVER_ADDRESS:$SERVER_PORT\";" > target/params.js
-    trunk serve --release -d dist -w . ../protocol
+    echo $"window.tracker_address = \"ws://$TRACKER_ADDRESS:$TRACKER_PORT\";" > target/params.js
+    trunk serve --release -d dist -w . ../tracker-protocol
 ) &
 CLIENT_PID=$!
 
 (
-    cd server
-    cargo watch -s "RUST_LOG=warn,server=debug cargo run -- -a $SERVER_ADDRESS -p $SERVER_PORT"
+    cd tracker
+    cargo watch -s "RUST_LOG=warn,tracker=debug cargo run -- -a $TRACKER_ADDRESS -p $TRACKER_PORT"
 ) &
-SERVER_PID=$!
+TRACKER_PID=$!
 
 wait
 exit

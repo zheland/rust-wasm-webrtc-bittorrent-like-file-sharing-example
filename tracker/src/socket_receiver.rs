@@ -3,8 +3,8 @@ use async_tungstenite::tungstenite;
 use async_tungstenite::tungstenite::protocol::Message;
 use async_tungstenite::WebSocketStream;
 use futures::stream::SplitStream;
-use protocol::ClientMessage;
 use thiserror::Error;
+use tracker_protocol::PeerTrackerMessage;
 
 #[derive(Debug)]
 pub struct SocketReceiver(SplitStream<WebSocketStream<TcpStream>>);
@@ -15,7 +15,7 @@ impl SocketReceiver {
         Self(receiver)
     }
 
-    pub async fn recv(&mut self) -> Result<Option<ClientMessage>, SocketMessageReceiveError> {
+    pub async fn recv(&mut self) -> Result<Option<PeerTrackerMessage>, SocketMessageReceiveError> {
         use bincode::deserialize;
         use futures::StreamExt;
 

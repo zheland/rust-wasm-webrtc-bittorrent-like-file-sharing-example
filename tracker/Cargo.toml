@@ -1,5 +1,5 @@
 [package]
-name = "server"
+name = "tracker"
 version = "0.0.1"
 edition = "2018"
 authors = ["Andrey Zheleznov <zheland.net@gmail.com>"]
@@ -17,5 +17,5 @@ log = "0.4.14"
 serde = "1.0"
 thiserror = "1.0"
 
-[dependencies.protocol]
-path = "../protocol"
+[dependencies.tracker-protocol]
+path = "../tracker-protocol"

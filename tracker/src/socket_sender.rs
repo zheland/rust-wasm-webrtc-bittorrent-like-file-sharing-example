@@ -3,8 +3,8 @@ use async_tungstenite::tungstenite;
 use async_tungstenite::tungstenite::protocol::Message;
 use async_tungstenite::WebSocketStream;
 use futures::stream::SplitSink;
-use protocol::ServerMessage;
 use thiserror::Error;
+use tracker_protocol::TrackerPeerMessage;
 
 #[derive(Debug)]
 pub struct SocketSender(SplitSink<WebSocketStream<TcpStream>, Message>);
@@ -14,7 +14,10 @@ impl SocketSender {
         Self(sender)
     }
 
-    pub async fn send(&mut self, message: ServerMessage) -> Result<(), SocketMessageSendError> {
+    pub async fn send(
+        &mut self,
+        message: TrackerPeerMessage,
+    ) -> Result<(), SocketMessageSendError> {
         use bincode::serialize;
         use futures::SinkExt;
 

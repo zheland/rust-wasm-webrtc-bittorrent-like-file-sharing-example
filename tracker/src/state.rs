@@ -3,15 +3,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 
 use async_std::sync::{Mutex, RwLock};
-use protocol::{FileSha256, PeerId};
 use thiserror::Error;
+use tracker_protocol::{PeerId, Sha256};
 
 use crate::SocketSender;
 
 #[derive(Debug)]
 pub struct State {
     peers_senders: RwLock<HashMap<PeerId, Weak<Mutex<SocketSender>>>>,
-    files_senders: RwLock<HashMap<FileSha256, Arc<RwLock<HashSet<PeerId>>>>>,
+    files_senders: RwLock<HashMap<Sha256, Arc<RwLock<HashSet<PeerId>>>>>,
     next_peer_id: AtomicU32,
 }
 
@@ -49,10 +49,10 @@ impl State {
 
     pub async fn add_file_peer_and_get_file_peer_list(
         &self,
-        file_sha256: FileSha256,
+        file_sha256: Sha256,
         peer_id: PeerId,
     ) -> Result<Vec<PeerId>, StateAddFilePeerError> {
-        let file_peers = self.get_or_insert_default_file_peers(file_sha256).await;
+        let file_peers = self.get_or_insert_empty_file_peers(file_sha256).await;
         let mut file_peers = file_peers.write().await;
 
         let is_inserted = file_peers.insert(peer_id);
@@ -63,9 +63,9 @@ impl State {
         }
     }
 
-    async fn get_or_insert_default_file_peers(
+    async fn get_or_insert_empty_file_peers(
         &self,
-        file_sha256: FileSha256,
+        file_sha256: Sha256,
     ) -> Arc<RwLock<HashSet<PeerId>>> {
         let mut files_peers = self.files_senders.write().await;
         let file_peers = files_peers.get(&file_sha256);
@@ -84,5 +84,5 @@ impl State {
 #[derive(Error, Debug)]
 pub enum StateAddFilePeerError {
     #[error("file {0} is already added")]
-    FileIsAlreadyAdded(FileSha256),
+    FileIsAlreadyAdded(Sha256),
 }

@@ -182,8 +182,8 @@ dependencies = [
  "console_log",
  "js-sys",
  "log",
- "protocol",
  "serde",
+ "tracker-protocol",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -436,14 +436,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol"
-version = "0.0.1"
-dependencies = [
- "hex",
- "serde",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -497,6 +489,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "tracker-protocol"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "serde",
 ]
 
 [[package]]

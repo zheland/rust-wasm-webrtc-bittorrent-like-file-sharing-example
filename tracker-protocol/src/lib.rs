@@ -37,15 +37,15 @@ pub struct IceCandidate {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct FileSha256(pub [u8; 32]);
+pub struct Sha256(pub [u8; 32]);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct PeerId(pub u32);
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub enum ClientMessage {
+pub enum PeerTrackerMessage {
     RequestOffers {
-        file_sha256: FileSha256,
+        file_sha256: Sha256,
     },
     SendOffer {
         peer_id: PeerId,
@@ -65,12 +65,13 @@ pub enum ClientMessage {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub enum ServerMessage {
+pub enum TrackerPeerMessage {
     PeerIdAssigned {
         peer_id: PeerId,
     },
-    OfferRequest {
+    RequestOffer {
         peer_id: PeerId,
+        file_sha256: Sha256,
     },
     PeerOffer {
         peer_id: PeerId,
@@ -89,7 +90,7 @@ pub enum ServerMessage {
     },
 }
 
-impl fmt::Display for FileSha256 {
+impl fmt::Display for Sha256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode_upper(self.0))
     }

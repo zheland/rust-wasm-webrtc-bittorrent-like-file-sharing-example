@@ -767,14 +767,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol"
-version = "0.0.1"
-dependencies = [
- "hex",
- "serde",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,23 +850,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "server"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "async-std",
- "async-tungstenite",
- "bincode",
- "clap",
- "env_logger",
- "futures",
- "log",
- "protocol",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -975,6 +950,31 @@ name = "tinyvec_macros"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+
+[[package]]
+name = "tracker"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-std",
+ "async-tungstenite",
+ "bincode",
+ "clap",
+ "env_logger",
+ "futures",
+ "log",
+ "serde",
+ "thiserror",
+ "tracker-protocol",
+]
+
+[[package]]
+name = "tracker-protocol"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "serde",
+]
 
 [[package]]
 name = "tungstenite"

@@ -1,5 +1,5 @@
 [package]
-name = "protocol"
+name = "tracker-protocol"
 version = "0.0.1"
 edition = "2018"
 authors = ["Andrey Zheleznov <zheland.net@gmail.com>"]
