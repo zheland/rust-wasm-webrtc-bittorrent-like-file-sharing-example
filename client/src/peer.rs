@@ -155,10 +155,9 @@ impl Peer {
         other_peer_id: PeerId,
         message: PeerPeerMessage,
     ) {
-        use crate::{body, window, ElementExt, FileSetChunkError};
-        use js_sys::{Array, Function, Reflect, Uint8Array};
-        use wasm_bindgen::{JsCast, JsValue};
-        use web_sys::{Blob, BlobPropertyBag, HtmlAnchorElement, Window};
+        use crate::{body, ElementExt, FileSetChunkError};
+        use js_sys::{Array, Uint8Array};
+        use web_sys::{Blob, HtmlAnchorElement, Url};
 
         match message {
             PeerPeerMessage::FileMetaData { sha256, name, len } => {
@@ -200,48 +199,21 @@ impl Peer {
                         }
                     }
                     if !file_ready_before && file.is_ready() {
-                        log::debug!("{} is fully downloaded...", file.name());
+                        log::debug!("{} is fully received...", file.name());
 
-                        log::debug!("  making Uint8Array");
                         let array = Uint8Array::from(file.data());
 
-                        //let mut blob_props = BlobPropertyBag::new();
-                        //let _: &mut _ = blob_props.type_("text/plain");
-
                         let blob_args: Array = [array].iter().collect();
-                        log::debug!("  marking Blob");
-                        let blob =
-                            Blob::new_with_u8_array_sequence(&blob_args /*, &blob_props*/).unwrap();
+                        let blob = Blob::new_with_u8_array_sequence(&blob_args).unwrap();
 
-                        let window: Window = window().unwrap();
-                        let url = Reflect::get(&window, &JsValue::from_str("URL")).unwrap();
-
-                        // when using web_sys API
-                        // Url::create_object_url_with_blob and HtmlAnchorElement::set_href
-                        // performance and stability is drastically degraded,
-                        // due to the transfer of blob url to wasm and back to js.
-                        let create_object_url_fn: Function =
-                            Reflect::get(&url, &JsValue::from_str("createObjectURL"))
-                                .unwrap()
-                                .dyn_into()
-                                .unwrap();
-
-                        let create_object_url_fn_args: Array = [blob].iter().collect();
-                        log::debug!("  marking url");
-                        let url =
-                            Reflect::apply(&create_object_url_fn, &url, &create_object_url_fn_args)
-                                .unwrap();
-
-                        log::debug!("  add link");
-
-                        log::debug!("  file is ready for downloading");
+                        let url = Url::create_object_url_with_blob(&blob).unwrap();
 
                         let link: HtmlAnchorElement = body().unwrap().add_child("a").unwrap();
                         link.add_text(&format!("Download {}", file.name())).unwrap();
-                        let _: bool =
-                            Reflect::set(&link, &JsValue::from_str("href"), &url).unwrap();
+                        link.set_href(&url);
                         link.set_target("_blank");
                         link.set_download(file.name());
+                        log::debug!("{} is ready for downloading...", file.name());
                     }
                 } else {
                     log::warn!("file metadata is not yet received");
