@@ -5,17 +5,22 @@
 An example of BitTorrent-like file sharing in a browser using Rust/Wasm and WebRTC.
 At the moment, the example is extremely CPU intensive, makes poor use of Peer-To-Peer interactions, and has poor block selection algorithms.
 
+## WIP Branch
+
+This is a work in progress branch.
+For a more stable version, use the master branch.
+
+## Crates
+
+- client: file sharing example ui,
+- peer: file sharing library,
+- server: tracker implementation binary,
+- tracker: tracker implementation library,
+- tracker-protocol: peer to tracker protocol.
+
 ## State
 
-- [x] Peer-To-Tracker protocol,
-- [x] Tracker implementation,
-- [x] Client file sharing,
-- [x] Client file receiving,
-- [x] Peer-To-Peer protocol
-- [x] Minimal client peer-to-peer interaction,
-- [x] Minimal client UI,
-- [ ] Better client peer-to-peer interaction,
-- [ ] Better client UI,
+TODO
 
 ## Setup
 
@@ -28,19 +33,13 @@ At the moment, the example is extremely CPU intensive, makes poor use of Peer-To
 * Open the browser console to read log messages,
 * If necessary, edit the server address and other parameters,
 * Сlick the button `Connect to server`,
-* Click the button `Choose file`,
-* The default settings are convenient for debugging file transfers of about 1 MB in size.
-* Now this peer will share this file
-* Copy file SHA256,
-* Open `localhost:8080` in another browser tab,
-* Open the browser console to read log messages,
-* If necessary, edit the server address and other parameters,
-* Сlick the button `Connect to server`,
-* Paste SHA256 and click `Receive file by sha256`,
-* This peer now gets parts of the file, and also distributes the already downloaded parts to other peers,
-* Wait for the file to load (progress is shown in the browser log),
-* When the file is fully downloaded, a link will be added to the page to download it,
-* If the seeder gets disconnected, the leechers will still continue to exchange parts of the file, and after a while all the leechers will have the same percentage of the downloaded file.
+* To share files:
+    * Select files with `Choose file` and click `Send file`,
+    * Copy the magnet link in magnet input,
+* To receive files:
+    * Paste the magnet link in magnet input,
+    * Click the button `Receive file by magnet`.
+    * Once the file is fully downloaded, it can be downloaded to the computer using the `Download` button.
 
 ## License
 

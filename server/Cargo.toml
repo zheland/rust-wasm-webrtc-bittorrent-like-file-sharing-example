@@ -1,13 +1,15 @@
 [package]
-name = "tracker-protocol"
+name = "server"
 version = "0.0.1"
 edition = "2021"
 authors = ["Andrey Zheleznov <zheland.net@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-hex = "0.4.3"
+anyhow = "1.0.44"
+async-std = "1.10.0"
+clap = "3.0.0-beta.4"
+env_logger = "0.9.0"
 
-[dependencies.serde]
-version = "1.0.130"
-features = ["derive"]
+[dependencies.tracker]
+path = "../tracker"

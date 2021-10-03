@@ -11,18 +11,8 @@
 )]
 
 mod app;
-mod server;
-mod socket;
-mod socket_receiver;
-mod socket_sender;
-mod state;
 
 use app::app;
-use server::Server;
-use socket::Socket;
-use socket_receiver::{SocketMessageReceiveError, SocketReceiver};
-use socket_sender::{SocketMessageSendError, SocketSender};
-use state::State;
 
 pub fn main() -> anyhow::Result<()> {
     use async_std::task;

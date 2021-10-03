@@ -1,17 +1,21 @@
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{Document, Element, HtmlElement, HtmlInputElement, Node, Window};
+use web_sys::{Document, Element, HtmlDivElement, HtmlElement, HtmlInputElement, Node, Window};
 
 pub fn window() -> Result<Window, WindowError> {
-    web_sys::window().ok_or(WindowError::WindowNotExists)
+    web_sys::window().ok_or(WindowError::WindowDoesNotExist)
 }
 
 fn document() -> Result<Document, DocumentError> {
-    window()?.document().ok_or(DocumentError::DocumentNotExists)
+    window()?
+        .document()
+        .ok_or(DocumentError::DocumentDoesNotExist)
 }
 
 pub fn body() -> Result<HtmlElement, DocumentBodyError> {
-    document()?.body().ok_or(DocumentBodyError::BodyNotExists)
+    document()?
+        .body()
+        .ok_or(DocumentBodyError::BodyDoesNotExist)
 }
 
 pub trait ElementExt {
@@ -19,6 +23,10 @@ pub trait ElementExt {
     fn add_text(&self, text: &str) -> Result<(), ElementAddTextError>;
     fn add_input(&self, text: &str, value: &str) -> Result<HtmlInputElement, ElementAddInputError>;
     fn remove(&self) -> Result<(), ElementRemoveError>;
+
+    fn add_div(&self) -> Result<HtmlDivElement, ElementAddChildError> {
+        self.add_child("div")
+    }
 }
 
 impl ElementExt for Element {
@@ -64,7 +72,7 @@ impl ElementExt for Element {
 #[derive(Error, Debug)]
 pub enum WindowError {
     #[error("window object does not exist")]
-    WindowNotExists,
+    WindowDoesNotExist,
 }
 
 #[derive(Error, Debug)]
@@ -72,7 +80,7 @@ pub enum DocumentError {
     #[error(transparent)]
     WindowError(#[from] WindowError),
     #[error("window.document object does not exist")]
-    DocumentNotExists,
+    DocumentDoesNotExist,
 }
 
 #[derive(Error, Debug)]
@@ -82,7 +90,7 @@ pub enum DocumentBodyError {
     #[error(transparent)]
     DocumentError(#[from] DocumentError),
     #[error("window.document.body object does not exist")]
-    BodyNotExists,
+    BodyDoesNotExist,
 }
 
 #[derive(Error, Debug)]

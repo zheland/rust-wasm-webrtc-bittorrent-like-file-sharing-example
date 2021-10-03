@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use async_std::net::TcpStream;
 use async_std::sync::Mutex;
+use async_tungstenite::tungstenite;
 use thiserror::Error;
 use tracker_protocol::{PeerId, TrackerPeerMessage};
 
 use crate::{
     SocketMessageReceiveError, SocketMessageSendError, SocketReceiver, SocketSender, State,
+    StateAddFilePeerError, StateRemoveFilePeerError,
 };
 
 #[derive(Debug)]
@@ -19,21 +21,25 @@ pub struct Socket {
 }
 
 impl Socket {
-    pub async fn new(stream: TcpStream, addr: SocketAddr, state: Arc<State>) -> Self {
+    pub async fn new(
+        stream: TcpStream,
+        addr: SocketAddr,
+        state: Arc<State>,
+    ) -> Result<Self, NewSocketError> {
         use async_tungstenite::accept_async;
         use futures::StreamExt;
 
-        let stream = accept_async(stream).await.unwrap();
+        let stream = accept_async(stream).await?;
         let (sender, receiver) = stream.split();
         let sender = Arc::new(Mutex::new(SocketSender::new(sender)));
         let receiver = SocketReceiver::new(receiver);
 
-        Self {
+        Ok(Self {
             sender,
             receiver,
             addr,
             state,
-        }
+        })
     }
 
     pub async fn run(mut self) -> Result<(), SocketRunError> {
@@ -58,8 +64,7 @@ impl Socket {
                     let peer_list = self
                         .state
                         .add_file_peer_and_get_file_peer_list(file_sha256, peer_id)
-                        .await
-                        .unwrap();
+                        .await?;
 
                     for other_peer_id in peer_list {
                         if peer_id == other_peer_id {
@@ -75,6 +80,9 @@ impl Socket {
                         )
                         .await?;
                     }
+                }
+                PeerTrackerMessage::RemoveFile { file_sha256 } => {
+                    self.state.remove_file_peer(file_sha256, peer_id).await?;
                 }
                 PeerTrackerMessage::SendOffer {
                     peer_id: other_peer_id,
@@ -137,9 +145,19 @@ impl Socket {
 }
 
 #[derive(Error, Debug)]
+pub enum NewSocketError {
+    #[error(transparent)]
+    WebSocketAcceptError(#[from] tungstenite::Error),
+}
+
+#[derive(Error, Debug)]
 pub enum SocketRunError {
     #[error(transparent)]
     MessageReceiveError(#[from] SocketMessageReceiveError),
     #[error(transparent)]
     MessageSendError(#[from] SocketMessageSendError),
+    #[error(transparent)]
+    StateAddFilePeerError(#[from] StateAddFilePeerError),
+    #[error(transparent)]
+    StateRemoveFilePeerError(#[from] StateRemoveFilePeerError),
 }

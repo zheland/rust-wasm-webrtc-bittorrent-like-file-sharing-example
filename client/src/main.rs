@@ -16,28 +16,20 @@ static ALLOC: wee_alloc::WeeAlloc<'_> = wee_alloc::WeeAlloc::INIT;
 
 mod app_ui;
 mod callback;
-mod connection;
-mod file;
+mod file_ui;
 mod html;
-mod message;
 mod params;
-mod peer;
 mod peer_ui;
-mod tracker;
 
 use app_ui::AppUi;
-use callback::{init_weak_callback, Callback, ClosureCell0, ClosureCell1};
-use connection::Connection;
-use file::{File, FileSetChunkError};
-use html::{body, window, ElementExt};
-use message::PeerPeerMessage;
+use callback::{init_weak_callback, ClosureCell1};
+use file_ui::FileUi;
+use html::{body, ElementExt};
 use params::{
-    default_tracker_address, CHUNK_SIZE, DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES,
-    DEFAULT_PEER_SEND_INTERVAL_MS, DEFAULT_UPLOAD_SPEED_BITS_PER_SECOND,
+    default_tracker_address, DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES, DEFAULT_PEER_DATA_SEND_INTERVAL,
+    DEFAULT_STATE_RESEND_INTERVAL, DEFAULT_UPLOAD_SPEED_BYTES_PER_SECOND,
 };
-use peer::{Peer, PeerParams};
 use peer_ui::PeerUi;
-use tracker::Tracker;
 
 fn main() {
     console_error_panic_hook::set_once();

@@ -1,10 +1,7 @@
-// https://stackoverflow.com/a/35697810
-// The maximum safe UDP payload is 508 bytes
-pub const CHUNK_SIZE: usize = 256;
-
-pub const DEFAULT_UPLOAD_SPEED_BITS_PER_SECOND: &str = "65536";
-pub const DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES: &str = "16777216";
-pub const DEFAULT_PEER_SEND_INTERVAL_MS: &str = "1000";
+pub const DEFAULT_UPLOAD_SPEED_BYTES_PER_SECOND: &str = "1048576";
+pub const DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES: &str = "2097152";
+pub const DEFAULT_PEER_DATA_SEND_INTERVAL: &str = "1";
+pub const DEFAULT_STATE_RESEND_INTERVAL: &str = "10";
 
 pub fn default_tracker_address() -> String {
     const FALLBACK_ADDRESS: &str = "ws://localhost:9010";

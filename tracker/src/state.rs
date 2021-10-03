@@ -4,14 +4,14 @@ use std::sync::{Arc, Weak};
 
 use async_std::sync::{Mutex, RwLock};
 use thiserror::Error;
-use tracker_protocol::{PeerId, Sha256};
+use tracker_protocol::{FileSha256, PeerId};
 
 use crate::SocketSender;
 
 #[derive(Debug)]
 pub struct State {
     peers_senders: RwLock<HashMap<PeerId, Weak<Mutex<SocketSender>>>>,
-    files_senders: RwLock<HashMap<Sha256, Arc<RwLock<HashSet<PeerId>>>>>,
+    files_senders: RwLock<HashMap<FileSha256, Arc<RwLock<HashSet<PeerId>>>>>,
     next_peer_id: AtomicU32,
 }
 
@@ -49,7 +49,7 @@ impl State {
 
     pub async fn add_file_peer_and_get_file_peer_list(
         &self,
-        file_sha256: Sha256,
+        file_sha256: FileSha256,
         peer_id: PeerId,
     ) -> Result<Vec<PeerId>, StateAddFilePeerError> {
         let file_peers = self.get_or_insert_empty_file_peers(file_sha256).await;
@@ -63,9 +63,25 @@ impl State {
         }
     }
 
+    pub async fn remove_file_peer(
+        &self,
+        file_sha256: FileSha256,
+        peer_id: PeerId,
+    ) -> Result<(), StateRemoveFilePeerError> {
+        let file_peers = self.get_or_insert_empty_file_peers(file_sha256).await;
+        let mut file_peers = file_peers.write().await;
+
+        let is_present_before = file_peers.remove(&peer_id);
+        if is_present_before {
+            Ok(())
+        } else {
+            Err(StateRemoveFilePeerError::FileIsNotAddedBefore(file_sha256))
+        }
+    }
+
     async fn get_or_insert_empty_file_peers(
         &self,
-        file_sha256: Sha256,
+        file_sha256: FileSha256,
     ) -> Arc<RwLock<HashSet<PeerId>>> {
         let mut files_peers = self.files_senders.write().await;
         let file_peers = files_peers.get(&file_sha256);
@@ -84,5 +100,11 @@ impl State {
 #[derive(Error, Debug)]
 pub enum StateAddFilePeerError {
     #[error("file {0} is already added")]
-    FileIsAlreadyAdded(Sha256),
+    FileIsAlreadyAdded(FileSha256),
+}
+
+#[derive(Error, Debug)]
+pub enum StateRemoveFilePeerError {
+    #[error("file {0} is not added before")]
+    FileIsNotAddedBefore(FileSha256),
 }

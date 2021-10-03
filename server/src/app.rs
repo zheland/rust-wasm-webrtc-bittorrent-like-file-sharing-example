@@ -17,11 +17,11 @@ struct Options {
 }
 
 pub async fn app() -> anyhow::Result<()> {
-    use crate::Server;
+    use tracker::Tracker;
 
     env_logger::init();
     let opts: Options = Options::parse();
     let addr = format!("{}:{}", opts.address, opts.port);
-    Server::new(addr).await?.run().await;
+    Tracker::new(addr).await?.run().await;
     Ok(())
 }

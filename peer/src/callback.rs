@@ -5,6 +5,7 @@ use js_sys::Function;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::convert::FromWasmAbi;
 
+pub type ClosureCell0 = RefCell<Option<Closure<dyn FnMut()>>>;
 pub type ClosureCell1<T1> = RefCell<Option<Closure<dyn FnMut(T1)>>>;
 
 pub trait Callback<F> {

@@ -51,7 +51,6 @@ impl Tracker {
     pub fn send(&self, message: PeerTrackerMessage) {
         use bincode::serialize;
 
-        log::debug!("{:?}", message);
         let request: Vec<u8> = serialize(&message).unwrap();
         self.websocket.send_with_u8_array(&request).unwrap();
     }
@@ -71,7 +70,9 @@ impl Tracker {
 
 impl Drop for Tracker {
     fn drop(&mut self) {
+        use crate::IgnoreEmpty;
+
         self.websocket.set_onmessage(None);
-        let _: Option<()> = self.websocket.close().ok();
+        self.websocket.close().ok().ignore_empty();
     }
 }

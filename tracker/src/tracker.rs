@@ -7,12 +7,12 @@ use thiserror::Error;
 use crate::State;
 
 #[derive(Debug)]
-pub struct Server {
+pub struct Tracker {
     listener: TcpListener,
     state: Arc<State>,
 }
 
-impl Server {
+impl Tracker {
     pub async fn new<Address: AsRef<str>>(addr: Address) -> Result<Self, NewServerError> {
         let listener = TcpListener::bind(addr.as_ref()).await?;
         let state = Arc::new(State::new());
@@ -29,10 +29,18 @@ impl Server {
         while let Ok((stream, addr)) = self.listener.accept().await {
             let state = Arc::clone(&self.state);
             let _: JoinHandle<()> = spawn(async move {
-                match Socket::new(stream, addr, state).await.run().await {
+                let socket = Socket::new(stream, addr, state).await;
+                let socket = match socket {
+                    Ok(socket) => socket,
+                    Err(err) => {
+                        log::error!("new socket {} error: {}", addr, err);
+                        return;
+                    }
+                };
+                match socket.run().await {
                     Ok(()) => {}
                     Err(err) => {
-                        log::error!("socket {} error: {}", addr, err);
+                        log::error!("socket {} run error: {}", addr, err);
                     }
                 }
             });

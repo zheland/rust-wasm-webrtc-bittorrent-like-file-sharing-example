@@ -1,26 +1,32 @@
 [package]
-name = "client"
+name = "peer"
 version = "0.0.1"
 edition = "2021"
 authors = ["Andrey Zheleznov <zheland.net@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+# TODO: Remove unused deps
 async-std = "1.10.0"
+base64 = "0.13.0"
+bincode = "1.3.3"
 console_error_panic_hook = "0.1.6"
 console_log = "0.2.0"
 derive_more = "0.99.16"
+fxhash = "0.2.1"
 hex = "0.4.3"
 js-sys = "0.3.53"
 log = "0.4.14"
+nonmax = "0.5.0"
+owning_ref = "0.4.1"
 rand = "0.8.4"
+rand_chacha = "0.3.1"
 serde = "1.0.130"
 sha2 = "0.9.8"
-static_assertions = "1.1.0"
+static_assertions = "1.1"
 thiserror = "1.0.30"
 wasm-bindgen = "0.2.60"
 wasm-bindgen-futures = "0.4.26"
-# TODO: Remove unused deps
 
 [dependencies.bitvec]
 version = "0.22.3"
@@ -28,9 +34,11 @@ features = [
     "serde"
 ]
 
-[dependencies.wee_alloc]
-version = "0.4.5"
-optional = true
+[dependencies.getrandom]
+version = "0.2.3"
+features = [
+    "js"
+]
 
 [dependencies.web-sys]
 version = "0.3.54"
@@ -54,6 +62,7 @@ features = [
     "MessageEvent",
     "MessagePort",
     "MouseEvent",
+    "Performance",
     "RtcConfiguration",
     "RtcDataChannel",
     "RtcDataChannelEvent",
@@ -81,9 +90,3 @@ features = [
 
 [dependencies.tracker-protocol]
 path = "../tracker-protocol"
-
-[dependencies.peer]
-path = "../peer"
-
-[features]
-default = ["wee_alloc"]

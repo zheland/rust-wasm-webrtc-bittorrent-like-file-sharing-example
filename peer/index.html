@@ -23,11 +23,26 @@
         font-size: 16px;
         width: 256px;
       }
-      input {
-        margin: 2px 8px;
+      a,
+      label {
+        display: block;
       }
-      .magnet {
-        width: 768px;
+      label span {
+        display: inline-block;
+        text-align: right;
+        width: 256px;
+      }
+      label span + label input {
+        margin-left: 16px;
+      }
+      .sha256 {
+        width: 576px;
+      }
+      .fileinput {
+        display: hidden;
+      }
+      input[type="file"] {
+        display: block;
       }
     </style>
   </head>
