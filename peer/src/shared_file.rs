@@ -436,14 +436,19 @@ impl<C, T, const CHUNK_SIZE: usize> SharedFile<C, T, CHUNK_SIZE> {
         if confirmed == FileStateSetStatus::AlreadySet {
             return Ok(SharedFileMarkStatus::AlreadyMarked);
         }
+        let possible = state.possible.set(&piece_idx).unwrap();
+
+        if !self.file.has_piece(&piece_idx).unwrap() {
+            return Ok(SharedFileMarkStatus::JustMarked);
+        }
 
         let mut piece = self.piece_queues.remove(&piece_idx).unwrap();
         piece.num_confirmed_owners.0 += 1;
-
-        let possible = state.possible.set(&piece_idx).unwrap();
         if possible == FileStateSetStatus::JustSet {
             piece.num_possible_owners.0 += 1;
         }
+        assert!(piece.num_confirmed_owners.0 <= piece.num_possible_owners.0);
+
         insert_piece(&mut self.piece_queues, &self.peers, piece_idx, piece);
         Ok(SharedFileMarkStatus::JustMarked)
     }
@@ -512,6 +517,7 @@ fn insert_piece<T>(
         data.num_confirmed_owners,
         num_piece_confirmed_owners(peers, &piece_idx)
     );
+    debug_assert!(data.num_confirmed_owners.0 <= data.num_possible_owners.0);
     let _ = pieces.insert(piece_idx, data);
 }
 

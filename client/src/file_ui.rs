@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use peer::JsSharedFile;
-use web_sys::{Event, HtmlButtonElement, HtmlDivElement, HtmlInputElement};
+use web_sys::{Event, HtmlButtonElement, HtmlCanvasElement, HtmlDivElement, HtmlInputElement};
 
 use crate::{ClosureCell1, Time};
 
@@ -13,6 +13,7 @@ pub struct FileUi {
     file_div: HtmlDivElement,
     download_button: HtmlButtonElement,
     download_button_handler: ClosureCell1<Event>,
+    canvas: Option<HtmlCanvasElement>,
 }
 
 impl FileUi {
@@ -42,10 +43,21 @@ impl FileUi {
         magnet_input.class_list().add_1("magnet").unwrap();
         magnet_input.set_read_only(true);
 
+        drop(shared_file_ref);
+
         let download_button: HtmlButtonElement = file_div.add_child("button").unwrap();
         download_button.add_text("Loading").unwrap();
         download_button.set_disabled(true);
 
+        let shared_file_ref = shared_file.read().await;
+        let canvas = if shared_file_ref.num_pieces() <= 1024 * 1024 {
+            let canvas: HtmlCanvasElement = file_div.add_child("canvas").unwrap();
+            canvas.set_width(1024);
+            canvas.set_height(256);
+            Some(canvas)
+        } else {
+            None
+        };
         drop(shared_file_ref);
 
         let file_ui = Arc::new(Self {
@@ -53,6 +65,7 @@ impl FileUi {
             file_div,
             download_button,
             download_button_handler: RefCell::new(None),
+            canvas,
         });
 
         file_ui.init();
@@ -103,6 +116,8 @@ impl FileUi {
 
     pub async fn update(self: &Arc<Self>) {
         use crate::ElementExt;
+        use wasm_bindgen::{Clamped, JsCast};
+        use web_sys::{CanvasRenderingContext2d, ImageData};
 
         let shared_file = self.shared_file.read().await;
         let state = shared_file.file().state();
@@ -111,6 +126,9 @@ impl FileUi {
             if self.download_button.disabled() {
                 self.download_button.replace_text("Download").unwrap();
                 self.download_button.set_disabled(false);
+                if let Some(canvas) = self.canvas.as_ref() {
+                    canvas.remove();
+                }
             }
         } else {
             self.download_button
@@ -120,6 +138,44 @@ impl FileUi {
                     state.len()
                 ))
                 .unwrap();
+            if let Some(canvas) = self.canvas.as_ref() {
+                let width = canvas.width();
+                let height = canvas.height();
+                let mut data = vec![0; (width * height * 4) as usize];
+
+                let shared_file = self.shared_file.read().await;
+                let num_lines = (shared_file.num_pieces() + 1023) / 256;
+
+                for (j, bit) in shared_file.file().state().raw().iter().enumerate() {
+                    let x = j % 1024;
+                    let y = j / 1024;
+                    for k in y * 1024 / num_lines..(y + 1) * 1024 / num_lines {
+                        let offset = (k * 1024 + x) * 4;
+                        if *bit {
+                            data[offset] = 58;
+                            data[offset + 1] = 151;
+                            data[offset + 2] = 87;
+                            data[offset + 3] = 255;
+                        } else {
+                            data[offset] = 0;
+                            data[offset + 1] = 0;
+                            data[offset + 2] = 0;
+                            data[offset + 3] = 255;
+                        }
+                    }
+                }
+
+                let image =
+                    ImageData::new_with_u8_clamped_array_and_sh(Clamped(&data), width, height)
+                        .unwrap();
+                let context: CanvasRenderingContext2d = canvas
+                    .get_context("2d")
+                    .unwrap()
+                    .unwrap()
+                    .dyn_into()
+                    .unwrap();
+                context.put_image_data(&image, 0.0, 0.0).unwrap();
+            }
         }
     }
 }
