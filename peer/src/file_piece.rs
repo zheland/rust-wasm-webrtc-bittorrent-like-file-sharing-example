@@ -1,4 +1,3 @@
-use derive_more::{Display, From, Into};
 use serde::{Deserialize, Serialize};
 
 // The maximum UDP package length: 65535 bytes
@@ -6,43 +5,21 @@ use serde::{Deserialize, Serialize};
 // Ethernet MTU: ~1500 bytes
 pub const FILE_PIECE_SIZE: usize = 1024;
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Display,
-    Eq,
-    From,
-    Hash,
-    Into,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-)]
-pub struct FilePieceIdx(pub u32);
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct FilePieceIdx(pub usize);
 
-pub type PiecePeerShift = u32;
-pub type PieceNumOwners = u32;
-pub type PieceSendAttempts = u32;
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PiecePeerShift(pub usize);
 
-impl From<usize> for FilePieceIdx {
-    fn from(value: usize) -> Self {
-        Self(value.try_into().unwrap())
-    }
-}
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PieceNumConfirmedOwners(pub usize);
 
-impl From<FilePieceIdx> for usize {
-    fn from(value: FilePieceIdx) -> Self {
-        value.0.try_into().unwrap()
-    }
-}
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PieceNumPossibleOwners(pub usize);
 
 #[derive(Clone, Copy, Debug)]
 pub struct FilePieceData {
-    pub idx: FilePieceIdx,
     pub peer_shift: PiecePeerShift,
-    pub num_owners: PieceNumOwners,
-    pub send_attempts: PieceSendAttempts,
+    pub num_confirmed_owners: PieceNumConfirmedOwners,
+    pub num_possible_owners: PieceNumPossibleOwners,
 }

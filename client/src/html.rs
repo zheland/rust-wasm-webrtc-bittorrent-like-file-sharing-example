@@ -21,6 +21,7 @@ pub fn body() -> Result<HtmlElement, DocumentBodyError> {
 pub trait ElementExt {
     fn add_child<T: JsCast>(&self, name: &str) -> Result<T, ElementAddChildError>;
     fn add_text(&self, text: &str) -> Result<(), ElementAddTextError>;
+    fn replace_text(&self, text: &str) -> Result<(), ElementReplaceTextError>;
     fn add_input(&self, text: &str, value: &str) -> Result<HtmlInputElement, ElementAddInputError>;
     fn remove(&self) -> Result<(), ElementRemoveError>;
 
@@ -46,6 +47,16 @@ impl ElementExt for Element {
             .append_child(&node)
             .map_err(ElementAddTextError::AppendChildError)?;
         Ok(())
+    }
+
+    fn replace_text(&self, text: &str) -> Result<(), ElementReplaceTextError> {
+        let children = self.child_nodes();
+        for child_idx in 0..children.length() {
+            let _: Node = self
+                .remove_child(&children.item(child_idx).unwrap())
+                .map_err(ElementReplaceTextError::RemoveChildError)?;
+        }
+        Ok(self.add_text(text)?)
     }
 
     fn add_input(&self, text: &str, value: &str) -> Result<HtmlInputElement, ElementAddInputError> {
@@ -111,6 +122,14 @@ pub enum ElementAddTextError {
     DocumentError(#[from] DocumentError),
     #[error("append child failed: {0:?}")]
     AppendChildError(JsValue),
+}
+
+#[derive(Error, Debug)]
+pub enum ElementReplaceTextError {
+    #[error("remove child failed: {0:?}")]
+    RemoveChildError(JsValue),
+    #[error(transparent)]
+    AddTextError(#[from] ElementAddTextError),
 }
 
 #[derive(Error, Debug)]

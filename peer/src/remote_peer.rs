@@ -24,8 +24,8 @@ pub enum RemotePeerState {
 
 // TODO: Remove remote peer on peer connection dropped
 #[derive(Debug)]
-pub struct RemotePeer {
-    local_peer: Weak<LocalPeer>,
+pub struct RemotePeer<T> {
+    local_peer: Weak<LocalPeer<T>>,
     peer_id: PeerId,
     state: RemotePeerState,
     peer_connection: RtcPeerConnection,
@@ -38,15 +38,17 @@ pub struct RemotePeer {
     data_message_handler: ClosureCell1<MessageEvent>,
     data_open_handler: ClosureCell1<Event>,
     data_error_handler: ClosureCell1<Event>,
-    //files: RwLock<HashMap<Sha256, Weak<RemoteFile>>>,
 }
 
-impl RemotePeer {
+impl<T> RemotePeer<T> {
     pub async fn new(
-        local_peer: &Arc<LocalPeer>,
+        local_peer: &Arc<LocalPeer<T>>,
         peer_id: PeerId,
         kind: RemotePeerKind,
-    ) -> Arc<Self> {
+    ) -> Arc<Self>
+    where
+        T: 'static + Ord,
+    {
         use core::cell::RefCell;
         use web_sys::{RtcDataChannelInit, RtcDataChannelType};
 
@@ -89,7 +91,10 @@ impl RemotePeer {
         remote_peer
     }
 
-    async fn init(self: &Arc<Self>) {
+    async fn init(self: &Arc<Self>)
+    where
+        T: 'static + Ord,
+    {
         use crate::init_weak_callback;
 
         init_weak_callback(
@@ -318,7 +323,10 @@ impl RemotePeer {
         log::debug!("remote all ice candidates sent");
     }
 
-    fn on_negotiationneeded(self: &Arc<Self>, _: Event) {
+    fn on_negotiationneeded(self: &Arc<Self>, _: Event)
+    where
+        T: 'static,
+    {
         use core::sync::atomic::Ordering;
         use wasm_bindgen_futures::spawn_local;
 
@@ -366,32 +374,9 @@ impl RemotePeer {
     }
 
     pub fn send(&self, message: PeerPeerMessage) {
-        use crate::FilePieceIdx;
-        use tracker_protocol::FileSha256;
+        use crate::PeerPeerMessageFmt;
 
-        match &message {
-            PeerPeerMessage::FilePiece {
-                sha256,
-                piece_idx,
-                bytes: _,
-            } => {
-                #[derive(Clone, Debug)]
-                struct FilePiece<'a> {
-                    sha256: &'a FileSha256,
-                    piece_idx: &'a FilePieceIdx,
-                }
-                log::trace!(
-                    "recv peer_message {} {:?}",
-                    self.peer_id,
-                    FilePiece { sha256, piece_idx }
-                ); // TODO: Remove
-            }
-            message => {
-                log::trace!("recv peer_message {} {:?}", self.peer_id, message);
-                // TODO: Remove
-            }
-        }
-        log::trace!("send peer_message {} {:?}", self.peer_id, message); // TODO: Remove
+        log::trace!("send peer_message: {}", PeerPeerMessageFmt(&message));
 
         use bincode::serialize;
         let request: Vec<u8> = serialize(&message).unwrap();
@@ -403,9 +388,11 @@ impl RemotePeer {
         message: PeerPeerMessage,
         max_buffer_bytes: u64,
     ) -> Result<(), PeerConnectionSendError> {
+        use crate::PeerPeerMessageFmt;
         use bincode::serialize;
 
         if (self.data_channel.buffered_amount() as u64) < max_buffer_bytes {
+            log::trace!("send peer_message: {}", PeerPeerMessageFmt(&message));
             let request: Vec<u8> = serialize(&message).unwrap();
             self.data_channel.send_with_u8_array(&request).unwrap();
             Ok(())
@@ -426,8 +413,11 @@ impl RemotePeer {
         log::error!("data channel error: {:?}", error);
     }
 
-    fn on_data_message(self: &Arc<Self>, ev: MessageEvent) {
-        use crate::unwrap_or_return;
+    fn on_data_message(self: &Arc<Self>, ev: MessageEvent)
+    where
+        T: 'static + Ord,
+    {
+        use crate::{unwrap_or_return, PeerPeerMessageFmt};
         use bincode::deserialize;
         use js_sys::{ArrayBuffer, Uint8Array};
         use wasm_bindgen::JsCast;
@@ -438,6 +428,8 @@ impl RemotePeer {
         let array_buffer: ArrayBuffer = ev.data().dyn_into().unwrap();
         let data = Uint8Array::new(&array_buffer).to_vec();
         let message = deserialize(&data).unwrap();
+
+        log::trace!("recv peer_message: {}", PeerPeerMessageFmt(&message));
 
         let remote_peer = Arc::clone(self);
         spawn_local(async move {
@@ -510,7 +502,7 @@ impl RtcSessionDescriptionInitExt for RtcSessionDescriptionInit {
     }
 }
 
-#[derive(Clone, Copy, Error, Debug)]
+#[derive(Clone, Copy, Error, Debug, Eq, PartialEq)]
 pub enum PeerConnectionSendError {
     #[error("DataChannel buffer is filled")]
     BufferIsFilled,

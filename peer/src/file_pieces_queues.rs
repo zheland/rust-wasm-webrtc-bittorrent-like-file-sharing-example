@@ -1,189 +1,156 @@
+use nonmax::NonMaxUsize;
 use thiserror::Error;
 
-use crate::{FilePieceData, FilePieceIdx, PieceNumOwners, PiecePeerShift, PieceSendAttempts};
+use crate::{FilePieceData, FilePieceIdx, PieceNumPossibleOwners};
 
-type PeerOffset = nonmax::NonMaxU32;
+type PeerOffset = NonMaxUsize;
 
 #[derive(Clone, Debug)]
 pub struct FilePiecesQueues {
-    pieces: Vec<FilePiecesQueuePiece>,
-    // The first queue vec element contain the vec of the rerest pieces.
-    // The last queue vec element contain the vec of the most frequent pieces.
-    queues: Vec<Vec<FilePieceIdx>>,
-    next_queue_idx: Option<usize>,
+    sharable_pieces: Vec<Option<FilePiecesQueuePiece>>,
+    pieces_by_num_possible_owners: Vec<Vec<FilePieceIdx>>,
+    min_possible_owners: Option<PieceNumPossibleOwners>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct FilePiecesQueuePiece {
-    num_owners: PieceNumOwners,
-    peer_shift: PiecePeerShift,
-    send_attempts: PieceSendAttempts,
-    offset: Option<PeerOffset>,
+    offset: PeerOffset,
+    data: FilePieceData,
 }
+
+static_assertions::const_assert_eq!(
+    core::mem::size_of::<FilePiecesQueuePiece>(),
+    core::mem::size_of::<Option<FilePiecesQueuePiece>>()
+);
 
 impl FilePiecesQueues {
     pub fn new(num_pieces: usize) -> Self {
         Self {
-            pieces: vec![FilePiecesQueuePiece::default(); num_pieces],
-            queues: Vec::new(),
-            next_queue_idx: None,
+            sharable_pieces: vec![None; num_pieces],
+            pieces_by_num_possible_owners: Vec::new(),
+            min_possible_owners: None,
         }
     }
 
-    pub fn next_queue(&self) -> Option<(usize, &[FilePieceIdx])> {
-        match self.next_queue_idx {
-            Some(idx) => Some((idx, &self.queues[idx])),
+    pub fn next_queue(&self) -> Option<(PieceNumPossibleOwners, &[FilePieceIdx])> {
+        match self.min_possible_owners {
+            Some(idx) => Some((idx, &self.pieces_by_num_possible_owners[idx.0])),
             None => None,
         }
     }
 
-    pub fn add(&mut self, data: FilePieceData) -> Result<(), FilePiecesQueueAddError> {
-        use crate::PushAndReturnOffset;
-        use crate::SetWithResizeDefault;
-        use nonmax::NonMaxU32;
-
-        let num_pieces = self.pieces.len();
-        let piece = self.pieces.get_mut(usize::from(data.idx)).ok_or_else(|| {
-            FilePiecesQueueAddError::PieceIndexOutOfRange {
-                piece_idx: data.idx,
-                len: num_pieces,
-            }
-        })?;
-        if piece.offset.is_some() {
-            return Err(FilePiecesQueueAddError::PieceIsAlreadyAdded {
-                piece_idx: data.idx,
-            });
-        }
-
-        piece.num_owners = data.num_owners;
-        piece.send_attempts = data.send_attempts;
-        let list_idx = FilePiecesQueuePiece {
-            num_owners: data.num_owners,
-            peer_shift: data.peer_shift,
-            send_attempts: data.send_attempts,
-            offset: None,
-        }
-        .list_idx();
-        self.next_queue_idx = Some(self.next_queue_idx.unwrap_or(list_idx).min(list_idx));
-
-        let pieces = self.queues.get_mut_or_resize_default(list_idx);
-        let offset = pieces.push_and_get_offset(data.idx);
-        let offset = u32::try_from(offset).unwrap();
-        let offset = NonMaxU32::new(offset).unwrap();
-
-        let _ = piece.offset.replace(offset);
-        Ok(())
-    }
-
+    /// Gets piece data from piece queues.
+    ///
+    /// Returns piece data for available pieces not yet received by all receivers.
     pub fn get(
-        &self,
-        piece_idx: FilePieceIdx,
-    ) -> Result<&FilePiecesQueuePiece, FilePiecesQueueGetError> {
-        let piece = self.pieces.get(usize::from(piece_idx)).ok_or_else(|| {
-            FilePiecesQueueGetError::PieceIndexOutOfRange {
-                piece_idx,
-                len: self.pieces.len(),
-            }
-        })?;
-        if piece.offset.is_some() {
-            Ok(piece)
-        } else {
-            Err(FilePiecesQueueGetError::PieceIsNotAdded { piece_idx })
-        }
-    }
-
-    pub fn remove(
         &mut self,
         piece_idx: FilePieceIdx,
+    ) -> Result<FilePieceData, FilePiecesQueueGetError> {
+        match &self.sharable_pieces.get(piece_idx.0) {
+            Some(Some(piece)) => Ok(piece.data),
+            Some(None) => Err(FilePiecesQueueGetError::PieceIsNotAdded),
+            None => Err(FilePiecesQueueGetError::PieceIndexOutOfRange {
+                len: self.sharable_pieces.len(),
+            }),
+        }
+    }
+
+    /// Inserts piece data into piece queues.
+    ///
+    /// Should be used when piece is available but not yet received by all receivers.
+    pub fn insert(
+        &mut self,
+        piece_idx: FilePieceIdx,
+        data: FilePieceData,
+    ) -> Result<(), FilePiecesQueueInsertError> {
+        use crate::{PushAndReturnOffset, SetWithResizeDefault};
+
+        match self.sharable_pieces.get(piece_idx.0) {
+            Some(Some(_)) => Err(FilePiecesQueueInsertError::PieceIsAlreadyAdded),
+            Some(None) => {
+                let pieces = self
+                    .pieces_by_num_possible_owners
+                    .get_mut_or_resize_default(data.num_possible_owners.0);
+                let offset = NonMaxUsize::new(pieces.push_and_get_offset(piece_idx)).unwrap();
+                self.min_possible_owners = Some(match self.min_possible_owners {
+                    None => data.num_possible_owners,
+                    Some(value) => value.min(data.num_possible_owners),
+                });
+                self.sharable_pieces[piece_idx.0] = Some(FilePiecesQueuePiece { offset, data });
+                Ok(())
+            }
+            None => Err(FilePiecesQueueInsertError::PieceIndexOutOfRange {
+                len: self.sharable_pieces.len(),
+            }),
+        }
+    }
+
+    /// Removes piece data from piece queues.
+    ///
+    /// Should be used when to schange piece data or after it has been received by all receivers.
+    pub fn remove(
+        &mut self,
+        piece_idx: &FilePieceIdx,
     ) -> Result<FilePieceData, FilePiecesQueueRemoveError> {
-        use crate::SetWithResizeDefault;
+        match self.sharable_pieces.get_mut(piece_idx.0).map(Option::take) {
+            Some(Some(piece)) => {
+                let offset = piece.offset.get();
+                let pieces =
+                    &mut self.pieces_by_num_possible_owners[piece.data.num_possible_owners.0];
+                let stored_piece_idx = pieces.swap_remove(offset);
+                debug_assert_eq!(piece_idx, &stored_piece_idx);
 
-        let num_pieces = self.pieces.len();
-        let piece = self.pieces.get_mut(usize::from(piece_idx)).ok_or_else(|| {
-            FilePiecesQueueRemoveError::PieceIndexOutOfRange {
-                piece_idx,
-                len: num_pieces,
-            }
-        })?;
-        if piece.offset.is_none() {
-            return Err(FilePiecesQueueRemoveError::PieceIsNotAdded { piece_idx });
-        }
-
-        let list_idx = piece.list_idx();
-
-        let offset_nm = piece.offset.take().unwrap();
-        let offset = usize::try_from(offset_nm.get()).unwrap();
-        let list_pieces = self.queues.get_mut_or_resize_default(list_idx);
-        let _ = list_pieces.swap_remove(offset);
-
-        let piece = *piece;
-        if let Some(&moved_piece_idx) = list_pieces.get(offset) {
-            self.pieces[usize::from(moved_piece_idx)].offset = Some(offset_nm);
-        }
-
-        if list_idx == self.next_queue_idx.unwrap() {
-            'outer: loop {
-                for list_idx in list_idx..self.queues.len() {
-                    if !self.queues[list_idx].is_empty() {
-                        self.next_queue_idx = Some(list_idx);
-                        break 'outer;
-                    }
+                if offset != pieces.len() {
+                    let moved_piece_idx = pieces[offset];
+                    self.sharable_pieces[moved_piece_idx.0]
+                        .as_mut()
+                        .unwrap()
+                        .offset = offset.try_into().unwrap();
                 }
-                self.next_queue_idx = None;
-                break;
+
+                self.update_min_possible_owners_after_remove();
+                Ok(piece.data)
+            }
+            Some(None) => Err(FilePiecesQueueRemoveError::PieceIsNotAdded),
+            None => Err(FilePiecesQueueRemoveError::PieceIndexOutOfRange {
+                len: self.sharable_pieces.len(),
+            }),
+        }
+    }
+
+    fn update_min_possible_owners_after_remove(&mut self) {
+        for list_idx in
+            self.min_possible_owners.unwrap().0..self.pieces_by_num_possible_owners.len()
+        {
+            if !self.pieces_by_num_possible_owners[list_idx].is_empty() {
+                self.min_possible_owners = Some(PieceNumPossibleOwners(list_idx));
+                return;
             }
         }
-
-        Ok(FilePieceData {
-            idx: piece_idx,
-            peer_shift: piece.peer_shift,
-            num_owners: piece.num_owners,
-            send_attempts: piece.send_attempts,
-        })
+        self.min_possible_owners = None;
     }
 }
 
-impl FilePiecesQueuePiece {
-    pub fn peer_shift(&self) -> PiecePeerShift {
-        self.peer_shift
-    }
-
-    pub fn num_owners(&self) -> PieceNumOwners {
-        self.num_owners
-    }
-
-    pub fn send_attempts(&self) -> PieceSendAttempts {
-        self.send_attempts
-    }
-
-    pub fn list_idx(&self) -> usize {
-        const MAX_SEND_ATTEMPTS_SHIFT: u32 = 256;
-
-        usize::try_from(self.num_owners).unwrap()
-            + usize::try_from(self.send_attempts.min(MAX_SEND_ATTEMPTS_SHIFT)).unwrap()
-    }
-}
-
-#[derive(Clone, Copy, Error, Debug)]
-pub enum FilePiecesQueueAddError {
-    #[error("piece index {piece_idx} out of range for piece count {len}")]
-    PieceIndexOutOfRange { piece_idx: FilePieceIdx, len: usize },
-    #[error("piece {piece_idx} is already added to FilePiecesQueue")]
-    PieceIsAlreadyAdded { piece_idx: FilePieceIdx },
-}
-
-#[derive(Clone, Copy, Error, Debug)]
+#[derive(Clone, Copy, Error, Debug, Eq, PartialEq)]
 pub enum FilePiecesQueueGetError {
-    #[error("piece index {piece_idx} out of range for piece count {len}")]
-    PieceIndexOutOfRange { piece_idx: FilePieceIdx, len: usize },
-    #[error("piece {piece_idx} is not added to FilePiecesQueue")]
-    PieceIsNotAdded { piece_idx: FilePieceIdx },
+    #[error("piece index out of range for piece count {len}")]
+    PieceIndexOutOfRange { len: usize },
+    #[error("piece is not added to FilePiecesQueue")]
+    PieceIsNotAdded,
 }
 
-#[derive(Clone, Copy, Error, Debug)]
+#[derive(Clone, Copy, Error, Debug, Eq, PartialEq)]
+pub enum FilePiecesQueueInsertError {
+    #[error("piece index out of range for piece count {len}")]
+    PieceIndexOutOfRange { len: usize },
+    #[error("piece is already added to FilePiecesQueue")]
+    PieceIsAlreadyAdded,
+}
+
+#[derive(Clone, Copy, Error, Debug, Eq, PartialEq)]
 pub enum FilePiecesQueueRemoveError {
-    #[error("piece index {piece_idx} out of range for piece count {len}")]
-    PieceIndexOutOfRange { piece_idx: FilePieceIdx, len: usize },
-    #[error("piece {piece_idx} is not added to FilePiecesQueue")]
-    PieceIsNotAdded { piece_idx: FilePieceIdx },
+    #[error("piece index out of range for piece count {len}")]
+    PieceIndexOutOfRange { len: usize },
+    #[error("piece is not added to FilePiecesQueue")]
+    PieceIsNotAdded,
 }

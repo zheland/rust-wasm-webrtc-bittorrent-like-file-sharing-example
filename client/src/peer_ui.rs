@@ -2,19 +2,20 @@ use core::cell::RefCell;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
-use peer::{LocalPeer, PeerSender};
+use peer::LocalPeer;
 use web_sys::{Event, HtmlButtonElement, HtmlDivElement, HtmlInputElement};
 
 use crate::{
-    ClosureCell1, FileUi, DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES, DEFAULT_PEER_DATA_SEND_INTERVAL,
-    DEFAULT_STATE_RESEND_INTERVAL, DEFAULT_UPLOAD_SPEED_BYTES_PER_SECOND,
+    ClosureCell1, FileUi, Sender, SenderParams, Time, DEFAULT_MAX_DATACHANNEL_BUFFER_BYTES,
+    DEFAULT_PEER_DATA_SEND_INTERVAL, DEFAULT_PIECE_RESEND_INTERVAL, DEFAULT_STATE_RESEND_INTERVAL,
+    DEFAULT_UPLOAD_SPEED_BYTES_PER_SECOND,
 };
 
 #[derive(Debug)]
 pub struct PeerUi {
-    local_peer: Arc<LocalPeer>,
+    local_peer: Arc<LocalPeer<Time>>,
     local_files: RwLock<Vec<Arc<FileUi>>>,
-    peer_sender: RwLock<Option<PeerSender>>,
+    peer_sender: RwLock<Option<Sender>>,
     peer_div: HtmlDivElement,
     recv_div: HtmlDivElement,
     send_div: HtmlDivElement,
@@ -26,7 +27,7 @@ pub struct PeerUi {
     max_channel_buffer_input: HtmlInputElement,
     peer_send_interval_input: HtmlInputElement,
     state_resend_interval_input: HtmlInputElement,
-    peer_sender_handler: ClosureCell1<Event>,
+    piece_resend_interval_input: HtmlInputElement,
     file_input_handler: ClosureCell1<Event>,
     recv_button_handler: ClosureCell1<Event>,
     send_button_handler: ClosureCell1<Event>,
@@ -34,6 +35,7 @@ pub struct PeerUi {
     max_channel_buffer_handler: ClosureCell1<Event>,
     peer_send_interval_handler: ClosureCell1<Event>,
     state_resend_interval_handler: ClosureCell1<Event>,
+    piece_resend_interval_handler: ClosureCell1<Event>,
 }
 
 impl PeerUi {
@@ -82,15 +84,26 @@ impl PeerUi {
             )
             .unwrap();
 
+        let piece_resend_interval_input = peer_div
+            .add_div()
+            .unwrap()
+            .add_input(
+                "piece resend interval (seconds):",
+                DEFAULT_PIECE_RESEND_INTERVAL,
+            )
+            .unwrap();
+
         let recv_div: HtmlDivElement = peer_div.add_div().unwrap();
         let send_div: HtmlDivElement = peer_div.add_div().unwrap();
 
+        recv_div.add_div().unwrap().add_text("Receive:").unwrap();
         let magnet_input: HtmlInputElement = recv_div.add_input("magnet", "").unwrap();
         magnet_input.class_list().add_1("magnet").unwrap();
 
         let recv_button: HtmlButtonElement = recv_div.add_child("button").unwrap();
         recv_button.add_text("Receive file by magnet").unwrap();
 
+        send_div.add_div().unwrap().add_text("Send:").unwrap();
         let file_input: HtmlInputElement = send_div.add_child("input").unwrap();
         file_input.set_type("file");
         file_input.class_list().add_1("fileinput").unwrap();
@@ -114,7 +127,8 @@ impl PeerUi {
             max_channel_buffer_input,
             peer_send_interval_input,
             state_resend_interval_input,
-            peer_sender_handler: RefCell::new(None),
+            piece_resend_interval_input,
+            //peer_sender_handler: RefCell::new(None),
             file_input_handler: RefCell::new(None),
             recv_button_handler: RefCell::new(None),
             send_button_handler: RefCell::new(None),
@@ -122,6 +136,7 @@ impl PeerUi {
             max_channel_buffer_handler: RefCell::new(None),
             peer_send_interval_handler: RefCell::new(None),
             state_resend_interval_handler: RefCell::new(None),
+            piece_resend_interval_handler: RefCell::new(None),
         });
 
         peer_ui.init();
@@ -189,6 +204,14 @@ impl PeerUi {
             &self.state_resend_interval_input,
         );
 
+        init_weak_callback(
+            &self,
+            Self::on_update_peer_sender,
+            &self.piece_resend_interval_handler,
+            HtmlElement::set_onchange,
+            &self.piece_resend_interval_input,
+        );
+
         self.update_peer_sender();
     }
 
@@ -197,7 +220,7 @@ impl PeerUi {
     }
 
     fn update_peer_sender(self: &Arc<Self>) {
-        use peer::{PeerSenderParams, FILE_PIECE_SIZE};
+        use peer::FILE_PIECE_SIZE;
         use std::time::Duration;
         use wasm_bindgen_futures::spawn_local;
 
@@ -206,38 +229,63 @@ impl PeerUi {
         let peer_send_interval: Result<f64, _> = self.peer_send_interval_input.value().parse();
         let state_resend_interval: Result<f64, _> =
             self.state_resend_interval_input.value().parse();
-        let (upload_speed_limit, max_channel_buffer, peer_send_interval, state_resend_interval) =
-            match (
-                upload_speed_limit,
-                max_channel_buffer,
-                peer_send_interval,
-                state_resend_interval,
-            ) {
-                (Ok(v1), Ok(v2), Ok(v3), Ok(v4)) => (v1, v2, v3, v4),
-                (v1, v2, v3, v4) => {
-                    log::error!(
-                        "PeerSender params parse failed: {:?} {:?} {:?} {:?}",
-                        v1,
-                        v2,
-                        v3,
-                        v4
-                    );
-                    return;
+        let piece_resend_interval: Result<f64, _> =
+            self.piece_resend_interval_input.value().parse();
+
+        let (
+            upload_speed_limit,
+            max_channel_buffer,
+            peer_send_interval,
+            state_resend_interval,
+            piece_resend_interval,
+        ) = match (
+            upload_speed_limit,
+            max_channel_buffer,
+            peer_send_interval,
+            state_resend_interval,
+            piece_resend_interval,
+        ) {
+            (Ok(v1), Ok(v2), Ok(v3), Ok(v4), Ok(v5)) => (v1, v2, v3, v4, v5),
+            (v1, v2, v3, v4, v5) => {
+                log::error!(
+                    "PeerSender params parse failed: {:?} {:?} {:?} {:?} {:?}",
+                    v1,
+                    v2,
+                    v3,
+                    v4,
+                    v5
+                );
+                return;
+            }
+        };
+
+        let peer_ui = Arc::clone(&self);
+
+        let update_callback = move || {
+            let peer_ui = Arc::clone(&peer_ui);
+            spawn_local(async move {
+                for file_ui in peer_ui.local_files.read().await.iter() {
+                    file_ui.update().await;
                 }
-            };
+            })
+        };
 
         let peer_ui = Arc::clone(&self);
         spawn_local(async move {
             let _: Option<_> = peer_ui.peer_sender.write().await.replace(
-                PeerSender::new(
+                Sender::new(
                     Arc::clone(&peer_ui.local_peer),
-                    PeerSenderParams {
+                    SenderParams {
                         data_send_interval: Duration::from_secs_f64(peer_send_interval),
                         state_resend_interval: Duration::from_secs_f64(state_resend_interval),
-                        num_pieces_to_be_sent: (upload_speed_limit / FILE_PIECE_SIZE as u64)
+                        piece_resend_interval: Duration::from_secs_f64(piece_resend_interval),
+                        num_pieces_to_be_sent: ((upload_speed_limit as f64 * peer_send_interval)
+                            as u64
+                            / FILE_PIECE_SIZE as u64)
                             as usize,
                         max_buffer_bytes: Some(max_channel_buffer),
                     },
+                    update_callback,
                 )
                 .unwrap(),
             );
@@ -245,12 +293,12 @@ impl PeerUi {
     }
 
     fn on_recv_click(self: &Arc<Self>, _: Event) {
-        use peer::{FileMetaData, LocalFile};
+        use peer::{File, FileMetadata};
         use wasm_bindgen_futures::spawn_local;
 
         let magnet = self.magnet_input.value();
         let magnet = magnet.trim();
-        let metadata = FileMetaData::decode_base64(magnet);
+        let metadata = FileMetadata::decode_base64(magnet);
         let metadata = match metadata {
             Ok(metadata) => metadata,
             Err(err) => {
@@ -261,11 +309,11 @@ impl PeerUi {
 
         let peer_ui = Arc::clone(&self);
         spawn_local(async move {
-            let file = LocalFile::new(metadata);
+            let file = File::new(metadata);
             match file {
                 Ok(file) => {
-                    peer_ui.local_peer.add_file(&file).await;
-                    let file_ui = FileUi::new(file).await;
+                    let shared_file = peer_ui.local_peer.add_file(file).await.unwrap();
+                    let file_ui = FileUi::new(shared_file).await;
                     peer_ui.local_files.write().await.push(file_ui);
                 }
                 Err(err) => {
@@ -286,7 +334,7 @@ impl PeerUi {
     }
 
     fn on_send_click(self: &Arc<Self>, _: Event) {
-        use peer::LocalFile;
+        use peer::File;
         use wasm_bindgen_futures::spawn_local;
 
         let files = self.file_input.files();
@@ -295,11 +343,11 @@ impl PeerUi {
                 let file = files.get(j).unwrap();
                 let peer_ui = Arc::clone(&self);
                 spawn_local(async move {
-                    let file = LocalFile::from_file(file).await;
+                    let file = File::from_file(file).await;
                     match file {
                         Ok(file) => {
-                            peer_ui.local_peer.add_file(&file).await;
-                            let file_ui = FileUi::new(file).await;
+                            let shared_file = peer_ui.local_peer.add_file(file).await.unwrap();
+                            let file_ui = FileUi::new(shared_file).await;
                             peer_ui.local_files.write().await.push(file_ui);
                         }
                         Err(err) => {
@@ -316,6 +364,8 @@ impl PeerUi {
 
 impl Drop for PeerUi {
     fn drop(&mut self) {
+        let _ = self.recv_div;
+        let _ = self.send_div;
         self.peer_div.remove();
     }
 }
