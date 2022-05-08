@@ -1,4 +1,4 @@
-# Rust Wasm WebRTC BitTorent-like file sharing example (WIP)
+# Rust Wasm WebRTC BitTorent-like file sharing example
 
 ## About
 
