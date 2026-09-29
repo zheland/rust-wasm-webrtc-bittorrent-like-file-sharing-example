@@ -1,5 +1,13 @@
 # Rust Wasm WebRTC BitTorent-like file sharing example
 
+> [!WARNING]
+> **Archived: 2026-09-29**
+>
+> This repository is no longer maintained.
+>
+> Dependencies are frozen as of the last commit and may be outdated or contain
+> known vulnerabilities.
+
 ## About
 
 An example of BitTorrent-like file sharing in a browser using Rust/Wasm and WebRTC.
